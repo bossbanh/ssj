@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0ea5e9">
+<title>ระบบบันทึกเวลาเข้า-ออกงาน</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Kanit", "Sarabun", Roboto, sans-serif;
+    background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+    min-height: 100vh;
+    color: #0f172a;
+  }
+  .app { max-width: 480px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
+
+  header { color: white; text-align: center; padding: 12px 0 16px; position: relative; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+  header p { margin: 6px 0 0; opacity: 0.9; font-size: 13px; }
+  .logout-btn {
+    position: absolute; right: 0; top: 10px;
+    background: rgba(255,255,255,0.2); color: white; border: none;
+    padding: 8px 12px; border-radius: 999px; font-size: 12px; cursor: pointer;
+  }
+  .user-chip {
+    position: absolute; left: 0; top: 10px;
+    background: rgba(255,255,255,0.2); color: white;
+    padding: 6px 12px; border-radius: 999px; font-size: 11px;
+  }
+
+  .card {
+    background: white; border-radius: 18px; padding: 18px; margin-bottom: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 15px; color: #334155;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2::before {
+    content: ""; width: 4px; height: 18px;
+    background: linear-gradient(180deg, #0ea5e9, #6366f1); border-radius: 2px;
+  }
+
+  label { display: block; font-size: 13px; color: #475569; margin-bottom: 4px; font-weight: 500; }
+  input, select {
+    width: 100%; padding: 11px 14px; font-size: 15px;
+    border: 1.5px solid #e2e8f0; border-radius: 10px;
+    background: #f8fafc; margin-bottom: 10px;
+    font-family: inherit; transition: all 0.2s;
+  }
+  input:focus, select:focus {
+    outline: none; border-color: #0ea5e9; background: white;
+    box-shadow: 0 0 0 3px rgba(14,165,233,0.1);
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .camera-wrap {
+    position: relative; width: 100%; aspect-ratio: 3/4;
+    background: #0f172a; border-radius: 14px; overflow: hidden; margin-bottom: 12px;
+  }
+  video, canvas, img.preview {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transform: scaleX(-1);
+  }
+  canvas { display: none; }
+  .camera-overlay {
+    position: absolute; inset: 0;
+    border: 3px dashed rgba(255,255,255,0.3); border-radius: 14px; pointer-events: none;
+  }
+  .camera-status {
+    position: absolute; top: 10px; left: 10px;
+    background: rgba(15,23,42,0.75); color: white;
+    padding: 6px 10px; border-radius: 999px; font-size: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .dot.off { background: #ef4444; animation: none; }
+
+  .gps-box {
+    display: flex; align-items: center; gap: 10px;
+    background: #f0f9ff; padding: 12px; border-radius: 10px;
+    border: 1px solid #bae6fd; font-size: 13px;
+  }
+  .gps-icon {
+    width: 36px; height: 36px; background: #0ea5e9; color: white;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .gps-info { flex: 1; min-width: 0; }
+  .gps-info strong { color: #0369a1; display: block; font-size: 12px; }
+  .gps-info small { color: #64748b; word-break: break-all; }
+
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  button {
+    padding: 14px; font-size: 15px; font-weight: 600;
+    border: none; border-radius: 12px; cursor: pointer; font-family: inherit;
+    transition: transform 0.1s, box-shadow 0.2s;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-primary { background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; box-shadow: 0 4px 12px rgba(14,165,233,0.35); }
+  .btn-checkin { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; box-shadow: 0 4px 12px rgba(34,197,94,0.35); }
+  .btn-checkout { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; box-shadow: 0 4px 12px rgba(245,158,11,0.35); }
+  .btn-secondary { background: #f1f5f9; color: #334155; }
+  .btn-danger { background: #fee2e2; color: #991b1b; }
+  .btn-full { grid-column: 1 / -1; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px;
+    transform: translateX(-50%) translateY(100px);
+    background: #0f172a; color: white;
+    padding: 12px 20px; border-radius: 999px; font-size: 14px;
+    opacity: 0; transition: all 0.3s; z-index: 100;
+    max-width: 90%; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { background: #16a34a; }
+  .toast.error { background: #dc2626; }
+
+  .tabs {
+    display: flex; background: white; border-radius: 14px; padding: 4px;
+    margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    overflow-x: auto;
+  }
+  .tab {
+    flex: 1; min-width: 80px; padding: 10px; text-align: center;
+    border-radius: 10px; font-size: 13px; font-weight: 600;
+    color: #64748b; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  }
+  .tab.active {
+    background: linear-gradient(135deg, #0ea5e9, #6366f1); color: white;
+    box-shadow: 0 2px 8px rgba(14,165,233,0.3);
+  }
+
+  .history-item {
+    background: white; border-radius: 12px; padding: 12px; margin-bottom: 10px;
+    display: flex; gap: 12px; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .history-thumb { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; transform: scaleX(-1); flex-shrink: 0; }
+  .history-info { flex: 1; min-width: 0; }
+  .history-type { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+  .history-type.checkin { background: #dcfce7; color: #166534; }
+  .history-type.checkout { background: #fef3c7; color: #92400e; }
+  .history-time { font-size: 14px; font-weight: 600; color: #0f172a; }
+  .history-name { font-size: 12px; color: #475569; margin-bottom: 2px; }
+  .history-loc { font-size: 11px; color: #64748b; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-status { font-size: 10px; padding: 2px 6px; border-radius: 6px; margin-top: 2px; display: inline-block; }
+  .status-synced { background: #dbeafe; color: #1e40af; }
+  .status-pending { background: #fee2e2; color: #991b1b; }
+
+  .empty { text-align: center; padding: 40px 20px; color: #94a3b8; font-size: 14px; }
+  .hide { display: none !important; }
+
+  .settings-info {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+    padding: 12px; font-size: 12px; color: #78350f; line-height: 1.6; margin-bottom: 10px;
+  }
+  .settings-info code { background: #1e293b; color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+
+  details summary { cursor: pointer; font-weight: 600; color: #475569; font-size: 14px; padding: 4px 0; }
+  details pre {
+    background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px;
+    font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* LOGIN */
+  .login-wrap {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .login-card {
+    background: white; border-radius: 24px; padding: 30px;
+    width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .login-card h1 { text-align: center; margin: 0 0 6px; font-size: 22px; color: #0f172a; }
+  .login-card .sub { text-align: center; color: #64748b; font-size: 13px; margin-bottom: 22px; }
+  .login-card .logo {
+    width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 16px;
+    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+    display: flex; align-items: center; justify-content: center; font-size: 32px;
+  }
+  .default-creds {
+    margin-top: 14px; font-size: 11px; color: #64748b; text-align: center;
+    background: #f8fafc; padding: 10px; border-radius: 8px;
+  }
+
+  /* Upload */
+  .upload-area {
+    border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px;
+    text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.2s;
+  }
+  .upload-area:hover { border-color: #0ea5e9; background: #f0f9ff; }
+  .upload-area .icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-area .hint { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+  .table-mini {
+    max-height: 300px; overflow: auto; border: 1px solid #e2e8f0;
+    border-radius: 8px; font-size: 12px;
+  }
+  .table-mini table { width: 100%; border-collapse: collapse; }
+  .table-mini th, .table-mini td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+  .table-mini th { background: #f1f5f9; position: sticky; top: 0; font-size: 11px; text-transform: uppercase; color: #475569; }
+  .table-mini tr:hover { background: #f8fafc; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; }
+  .badge.admin { background: #fce7f3; color: #9f1239; }
+  .badge.user { background: #dbeafe; color: #1e40af; }
+  .badge.ontime { background: #dcfce7; color: #166534; }
+  .badge.late { background: #fef3c7; color: #92400e; }
+  .badge.absent { background: #fee2e2; color: #991b1b; }
+  .badge.nocheckout { background: #e0e7ff; color: #3730a3; }
+  .badge.note { background: #f3e8ff; color: #6b21a8; }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-card { background: white; border-radius: 12px; padding: 14px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .stat-card .num { font-size: 24px; font-weight: 700; color: #0ea5e9; }
+  .stat-card .lbl { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  .kv-list { font-size: 13px; color: #475569; }
+  .kv-list > div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+  .kv-list > div:last-child { border: none; }
+
+  .small { font-size: 12px; color: #64748b; }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <div class="logo">🕐</div>
+    <h1>ระบบบันทึกเวลา</h1>
+    <p class="sub">กรุณาเข้าสู่ระบบ</p>
+    <label>ชื่อผู้ใช้ (Username)</label>
+    <input type="text" id="loginUser" autocomplete="username" placeholder="username">
+    <label>รหัสผ่าน (Password)</label>
+    <input type="password" id="loginPass" autocomplete="current-password" placeholder="password">
+    <button class="btn-primary btn-full" id="btnLogin" style="width:100%; margin-top:8px">เข้าสู่ระบบ</button>
+    <div class="default-creds">
+      <strong>Default:</strong><br>
+      Admin — <code>admin</code> / <code>admin123</code><br>
+      User — <code>user</code> / <code>user123</code>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div id="mainApp" class="app hide">
+  <header>
+    <div class="user-chip" id="userChip">👤 —</div>
+    <button class="logout-btn" id="btnLogout">ออกจากระบบ</button>
+    <h1 style="margin-top:30px">🕐 ระบบบันทึกเวลาเข้า-ออกงาน</h1>
+    <p>ถ่ายเซลฟี่ + ระบุพิกัด GPS</p>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="checkin">บันทึก</div>
+    <div class="tab" data-tab="history">ประวัติ</div>
+    <div class="tab" data-tab="report">📊 รายงาน</div>
+    <div class="tab admin-only hide" data-tab="admin">⚙️ Admin</div>
+  </div>
+
+  <!-- TAB: CHECK IN -->
+  <div id="tab-checkin">
+    <div class="card">
+      <h2>ข้อมูลพนักงาน</h2>
+
+      <div id="empFromList" class="hide">
+        <label>เลือกพนักงาน</label>
+        <select id="empSelect">
+          <option value="">-- เลือกจากรายชื่อ --</option>
+        </select>
+        <label>แผนก</label>
+        <input type="text" id="empDeptDisplay" readonly>
+      </div>
+
+      <div id="empManual">
+        <label>ชื่อ-นามสกุล</label>
+        <input type="text" id="empName" placeholder="เช่น สมชาย ใจดี" autocomplete="name">
+        <div class="row2">
+          <div>
+            <label>รหัสพนักงาน</label>
+            <input type="text" id="empId" placeholder="EMP-001">
+          </div>
+          <div>
+            <label>แผนก</label>
+            <input type="text" id="empDept" placeholder="เช่น การขาย">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ถ่ายรูปเซลฟี่ (กล้องหน้า)</h2>
+      <div class="camera-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
+        <img id="photoPreview" class="preview hide" alt="preview">
+        <div class="camera-overlay"></div>
+        <div class="camera-status">
+          <span class="dot" id="camDot"></span>
+          <span id="camStatus">กำลังเปิดกล้อง...</span>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary" id="btnRetake">🔄 ถ่ายใหม่</button>
+        <button class="btn-primary" id="btnCapture">📸 ถ่ายรูป</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn-secondary btn-full" id="btnNativeCamera">📷 ใช้กล้องของมือถือแทน</button>
+      </div>
+      <input type="file" accept="image/*" capture="user" id="nativeCamera" class="hide">
+      <div id="cameraWarning" class="settings-info hide" style="margin-top:10px">
+        ⚠️ เบราว์เซอร์บล็อกการใช้กล้องแบบสด — กรุณากดปุ่ม <strong>"📷 ใช้กล้องของมือถือแทน"</strong> ด้านล่าง
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>พิกัดที่อยู่ (GPS)</h2>
+      <div class="gps-box">
+        <div class="gps-icon">📍</div>
+        <div class="gps-info">
+          <strong id="gpsTitle">กำลังค้นหาตำแหน่ง...</strong>
+          <small id="gpsDetail">กรุณาอนุญาตการเข้าถึงตำแหน่ง</small>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn-secondary btn-full" id="btnRefreshGps">🔄 รีเฟรชตำแหน่ง</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>หมายเหตุ (ถ้ามี)</h2>
+      <label>เลือกประเภท</label>
+      <select id="noteSelect">
+        <option value="">-- ไม่มี --</option>
+        <option value="เดินทางไปราชการ">เดินทางไปราชการ</option>
+        <option value="ประชุมนอกสถานที่">ประชุมนอกสถานที่</option>
+        <option value="__other__">อื่นๆ (ระบุ)</option>
+      </select>
+      <input type="text" id="noteCustom" placeholder="ระบุหมายเหตุ" class="hide">
+    </div>
+
+    <div class="card">
+      <h2>บันทึกเวลา</h2>
+      <div class="settings-info" id="todayStatusInfo" style="margin-bottom:12px"></div>
+      <div class="btn-row">
+        <button class="btn-checkin" id="btnCheckIn">✅ เข้างาน</button>
+        <button class="btn-checkout" id="btnCheckOut">🏁 ออกงาน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: REPORT -->
+  <div id="tab-report" class="hide">
+    <div class="card">
+      <h2>เลือกรายงาน</h2>
+      <div class="tabs" style="background:#f1f5f9; box-shadow:none; margin-bottom:12px">
+        <div class="tab active" data-report="daily">รายวัน</div>
+        <div class="tab" data-report="monthly">รายเดือน</div>
+      </div>
+
+      <div id="report-daily">
+        <label>เลือกวันที่</label>
+        <input type="date" id="reportDate">
+        <div class="stats-grid" style="margin-top:10px">
+          <div class="stat-card"><div class="num" id="dStatTotal">0</div><div class="lbl">บันทึกรวม</div></div>
+          <div class="stat-card"><div class="num" id="dStatOnTime" style="color:#16a34a">0</div><div class="lbl">ตรงเวลา</div></div>
+          <div class="stat-card"><div class="num" id="dStatLate" style="color:#d97706">0</div><div class="lbl">มาสาย</div></div>
+          <div class="stat-card"><div class="num" id="dStatAbsent" style="color:#dc2626">0</div><div class="lbl">ขาดงาน</div></div>
+        </div>
+        <div class="table-mini" id="dailyTable" style="max-height:400px"></div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn-secondary btn-full" id="btnExportDaily">📥 Export รายวัน (CSV)</button>
+        </div>
+      </div>
+
+      <div id="report-monthly" class="hide">
+        <label>เลือกเดือน</label>
+        <input type="month" id="reportMonth">
+        <div class="stats-grid" style="margin-top:10px">
+          <div class="stat-card"><div class="num" id="mStatDays">0</div><div class="lbl">วันทำการ</div></div>
+          <div class="stat-card"><div class="num" id="mStatHours">0</div><div class="lbl">ชม.รวม</div></div>
+          <div class="stat-card"><div class="num" id="mStatLate" style="color:#d97706">0</div><div class="lbl">ครั้งมาสาย</div></div>
+          <div class="stat-card"><div class="num" id="mStatAbsent" style="color:#dc2626">0</div><div class="lbl">ครั้งขาดงาน</div></div>
+        </div>
+        <div class="table-mini" id="monthlyTable" style="max-height:400px"></div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn-secondary btn-full" id="btnExportMonthly">📥 Export รายเดือน (CSV)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: HISTORY -->
+  <div id="tab-history" class="hide">
+    <div class="card">
+      <h2>ประวัติการบันทึก <span id="historyScope" class="small"></span></h2>
+      <div id="historyList"></div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn-secondary" id="btnExport">📥 Export CSV</button>
+        <button class="btn-danger admin-only hide" id="btnClear">🗑️ ล้างประวัติ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: ADMIN -->
+  <div id="tab-admin" class="hide">
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card"><div class="num" id="statEmp">0</div><div class="lbl">พนักงาน</div></div>
+      <div class="stat-card"><div class="num" id="statDept">0</div><div class="lbl">แผนก</div></div>
+      <div class="stat-card"><div class="num" id="statRec">0</div><div class="lbl">บันทึกรวม</div></div>
+      <div class="stat-card"><div class="num" id="statUser">0</div><div class="lbl">บัญชีผู้ใช้</div></div>
+    </div>
+
+    <!-- Work Time Settings -->
+    <div class="card">
+      <h2>ตั้งค่าเวลาทำงาน</h2>
+      <div class="settings-info">
+        ใช้สำหรับคำนวณสถานะ <strong>มาสาย</strong> / <strong>ขาดงาน</strong> และชั่วโมงทำงาน
+      </div>
+      <div class="row2">
+        <div>
+          <label>เวลาเริ่มงาน</label>
+          <input type="time" id="cfgStart" value="08:30">
+        </div>
+        <div>
+          <label>เวลาเลิกงาน</label>
+          <input type="time" id="cfgEnd" value="18:00">
+        </div>
+      </div>
+      <button class="btn-primary btn-full" id="btnSaveWorkTime">💾 บันทึกเวลาทำงาน</button>
+    </div>
+
+    <!-- Upload Employee -->
+    <div class="card">
+      <h2>อัปโหลดรายชื่อพนักงาน</h2>
+      <div class="settings-info">
+        รองรับไฟล์ <strong>CSV / Excel (.xlsx, .xls) / PDF</strong><br>
+        ต้องมีคอลัมน์ (คอลัมน์หัวตาราง): <code>id</code>, <code>name</code>, <code>department</code>
+        หรือภาษาไทย: <code>รหัส</code>, <code>ชื่อ</code>, <code>แผนก</code>
+      </div>
+      <label for="fileEmp" class="upload-area" id="dropEmp">
+        <div class="icon">📤</div>
+        <div><strong>แตะเพื่อเลือกไฟล์</strong></div>
+        <div class="hint">CSV, XLSX, XLS, PDF</div>
+      </label>
+      <input type="file" id="fileEmp" accept=".csv,.xlsx,.xls,.pdf" class="hide">
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn-secondary" id="btnDownloadTemplate">📄 ดาวน์โหลดเทมเพลต</button>
+        <button class="btn-danger" id="btnClearEmp">🗑️ ล้างรายชื่อ</button>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="small" style="margin-bottom:6px">รายชื่อปัจจุบัน (<span id="empCount">0</span>)</div>
+        <div class="table-mini" id="empTable"></div>
+      </div>
+    </div>
+
+    <!-- Upload Department -->
+    <div class="card">
+      <h2>อัปโหลด/จัดการแผนก</h2>
+      <div class="settings-info">
+        ไฟล์ต้องมีคอลัมน์ <code>department</code> หรือ <code>แผนก</code> (หรือจะกรอกเพิ่มมือก็ได้)
+      </div>
+      <label for="fileDept" class="upload-area">
+        <div class="icon">🏢</div>
+        <div><strong>แตะเพื่อเลือกไฟล์แผนก</strong></div>
+        <div class="hint">CSV, XLSX, XLS, PDF</div>
+      </label>
+      <input type="file" id="fileDept" accept=".csv,.xlsx,.xls,.pdf" class="hide">
+
+      <div class="row2" style="margin-top:10px">
+        <input type="text" id="newDeptName" placeholder="ชื่อแผนกใหม่">
+        <button class="btn-primary" id="btnAddDept">+ เพิ่ม</button>
+      </div>
+
+      <div style="margin-top:8px">
+        <div class="small" style="margin-bottom:6px">แผนกปัจจุบัน (<span id="deptCount">0</span>)</div>
+        <div class="table-mini" id="deptTable"></div>
+      </div>
+    </div>
+
+    <!-- Manage Users -->
+    <div class="card">
+      <h2>จัดการบัญชีผู้ใช้</h2>
+      <div class="row2">
+        <input type="text" id="newUserName" placeholder="username">
+        <input type="password" id="newUserPass" placeholder="password">
+      </div>
+      <div class="row2">
+        <select id="newUserRole">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button class="btn-primary" id="btnAddUser">+ เพิ่มผู้ใช้</button>
+      </div>
+      <div style="margin-top:12px">
+        <div class="small" style="margin-bottom:6px">รายชื่อผู้ใช้</div>
+        <div class="table-mini" id="userTable"></div>
+      </div>
+    </div>
+
+    <!-- Google Sheet Settings -->
+    <div class="card">
+      <h2>Google Sheet Webhook</h2>
+      <div class="settings-info">
+        วาง URL ของ Google Apps Script Web App (ถ้าปล่อยว่าง ระบบจะเก็บเฉพาะในเครื่อง)
+      </div>
+      <label>Web App URL</label>
+      <input type="url" id="webhookUrl" placeholder="https://script.google.com/macros/s/..../exec">
+      <div class="btn-row">
+        <button class="btn-secondary" id="btnTestWebhook">🧪 ทดสอบ</button>
+        <button class="btn-primary" id="btnSaveSettings">💾 บันทึก</button>
+      </div>
+
+      <details style="margin-top:12px">
+        <summary>📋 Apps Script Code</summary>
+<pre>function doPost(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('Attendance');
+  if (!sheet) {
+    sheet = ss.insertSheet('Attendance');
+    sheet.appendRow(['Timestamp','Type','Name','EmployeeID','Department',
+      'Note','Latitude','Longitude','Accuracy','MapsLink','Photo','SubmittedBy','Device']);
+  }
+  const data = JSON.parse(e.postData.contents);
+  let photoUrl = '';
+  if (data.photo) {
+    try {
+      const folderName = 'Attendance Photos';
+      const folders = DriveApp.getFoldersByName(folderName);
+      const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+      const base64 = data.photo.split(',')[1];
+      const blob = Utilities.newBlob(Utilities.base64Decode(base64), 'image/jpeg',
+        `${data.type}_${data.employeeId||'x'}_${new Date().getTime()}.jpg`);
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      photoUrl = file.getUrl();
+    } catch(err) { photoUrl = 'ERROR: ' + err.message; }
+  }
+  const mapsLink = data.lat && data.lng ? `https://www.google.com/maps?q=${data.lat},${data.lng}` : '';
+  sheet.appendRow([new Date(data.timestamp), data.type, data.name||'',
+    data.employeeId||'', data.department||'', data.note||'',
+    data.lat||'', data.lng||'', data.accuracy||'', mapsLink, photoUrl,
+    data.submittedBy||'', data.device||'']);
+  return ContentService.createTextOutput(JSON.stringify({ok:true, photoUrl}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ok:true, message:'Attendance API'}))
+    .setMimeType(ContentService.MimeType.JSON);
+}</pre>
+      </details>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ============ CONSTANTS ============
+const LS = {
+  users: 'att_users',
+  session: 'att_session',
+  employees: 'att_employees',
+  departments: 'att_departments',
+  history: 'att_history',
+  webhook: 'att_webhook',
+  lastEmp: 'att_lastEmp',
+  settings: 'att_settings'
+};
+
+const DEFAULT_SETTINGS = { startTime: '08:30', endTime: '18:00' };
+
+// PDF.js worker
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+// ============ SIMPLE HASH (not real security) ============
+async function hash(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ============ STATE ============
+const state = {
+  photoDataUrl: null,
+  location: null,
+  stream: null,
+  session: JSON.parse(localStorage.getItem(LS.session) || 'null'),
+  users: [],
+  employees: JSON.parse(localStorage.getItem(LS.employees) || '[]'),
+  departments: JSON.parse(localStorage.getItem(LS.departments) || '[]'),
+  history: JSON.parse(localStorage.getItem(LS.history) || '[]'),
+  webhookUrl: localStorage.getItem(LS.webhook) || '',
+  settings: Object.assign({}, DEFAULT_SETTINGS, JSON.parse(localStorage.getItem(LS.settings) || '{}'))
+};
+
+const $ = id => document.getElementById(id);
+
+// ============ INIT USERS (defaults) ============
+async function initUsers() {
+  let users = JSON.parse(localStorage.getItem(LS.users) || 'null');
+  if (!users) {
+    users = [
+      { username: 'admin', passwordHash: await hash('admin123'), role: 'admin' },
+      { username: 'user',  passwordHash: await hash('user123'),  role: 'user' }
+    ];
+    localStorage.setItem(LS.users, JSON.stringify(users));
+  }
+  state.users = users;
+}
+
+// ============ TOAST ============
+function toast(msg, type='') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2800);
+}
+
+// ============ AUTH ============
+async function handleLogin() {
+  const u = $('loginUser').value.trim();
+  const p = $('loginPass').value;
+  if (!u || !p) { toast('กรุณากรอก username / password', 'error'); return; }
+  const ph = await hash(p);
+  const user = state.users.find(x => x.username === u && x.passwordHash === ph);
+  if (!user) { toast('username หรือ password ไม่ถูกต้อง', 'error'); return; }
+  state.session = { username: user.username, role: user.role, loginAt: Date.now() };
+  localStorage.setItem(LS.session, JSON.stringify(state.session));
+  $('loginPass').value = '';
+  showMainApp();
+}
+
+function handleLogout() {
+  if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+  state.session = null;
+  localStorage.removeItem(LS.session);
+  $('mainApp').classList.add('hide');
+  $('loginScreen').classList.remove('hide');
+  toast('ออกจากระบบแล้ว', 'success');
+}
+
+function showMainApp() {
+  $('loginScreen').classList.add('hide');
+  $('mainApp').classList.remove('hide');
+  $('userChip').textContent = `👤 ${state.session.username} · ${state.session.role}`;
+
+  // Admin-only visibility
+  const isAdmin = state.session.role === 'admin';
+  document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('hide', !isAdmin));
+
+  switchTab('checkin');
+  startCamera();
+  getLocation();
+  refreshEmployeeDropdown();
+  renderHistory();
+  if (isAdmin) renderAdmin();
+
+  // Restore last selection
+  const lastEmp = JSON.parse(localStorage.getItem(LS.lastEmp) || 'null');
+  if (lastEmp) {
+    $('empName').value = lastEmp.name || '';
+    $('empId').value = lastEmp.employeeId || '';
+    $('empDept').value = lastEmp.department || '';
+    if ($('empSelect').querySelector(`option[value="${lastEmp.employeeId}"]`)) {
+      $('empSelect').value = lastEmp.employeeId;
+      onEmpSelectChange();
+    }
+  }
+}
+
+// ============ TABS ============
+function switchTab(name) {
+  document.querySelectorAll('#tabs > .tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+  ['checkin','history','report','admin'].forEach(n => {
+    const el = $('tab-' + n);
+    if (el) el.classList.toggle('hide', n !== name);
+  });
+  if (name === 'history') renderHistory();
+  if (name === 'admin') renderAdmin();
+  if (name === 'report') initReportTab();
+  if (name === 'checkin') updateTodayStatusInfo();
+}
+document.addEventListener('click', e => {
+  const tab = e.target.closest('#tabs > .tab');
+  if (tab && tab.dataset.tab) switchTab(tab.dataset.tab);
+  const rtab = e.target.closest('[data-report]');
+  if (rtab) switchReport(rtab.dataset.report);
+});
+
+function switchReport(kind) {
+  document.querySelectorAll('[data-report]').forEach(x =>
+    x.classList.toggle('active', x.dataset.report === kind));
+  $('report-daily').classList.toggle('hide', kind !== 'daily');
+  $('report-monthly').classList.toggle('hide', kind !== 'monthly');
+  if (kind === 'daily') renderDailyReport();
+  else renderMonthlyReport();
+}
+
+// ============ STATUS LOGIC ============
+function parseHM(str) {
+  const [h,m] = String(str).split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+function getLocalDateKey(iso) {
+  // Use local date (YYYY-MM-DD)
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function minutesOfDay(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+/**
+ * Pair IN/OUT records per (employeeId, date) and compute status.
+ * Rules:
+ *  - LATE  : IN time > startTime (e.g. 08:30)
+ *  - ABSENT: LATE AND (no OUT record OR OUT time > endTime)
+ *            (ตามกฎที่ผู้ใช้กำหนด)
+ *  - Work hours = OUT - IN (if both exist)
+ */
+function pairAndAnalyze(records) {
+  const startMin = parseHM(state.settings.startTime);
+  const endMin = parseHM(state.settings.endTime);
+
+  const groups = new Map();
+  records.forEach(r => {
+    const key = r.employeeId + '|' + getLocalDateKey(r.timestamp);
+    if (!groups.has(key)) groups.set(key, { in: null, out: null, records: [], employee: r });
+    const g = groups.get(key);
+    g.records.push(r);
+    if (r.type === 'IN') {
+      if (!g.in || new Date(r.timestamp) < new Date(g.in.timestamp)) g.in = r;
+    } else if (r.type === 'OUT') {
+      if (!g.out || new Date(r.timestamp) > new Date(g.out.timestamp)) g.out = r;
+    }
+  });
+
+  const results = [];
+  groups.forEach((g, key) => {
+    const [employeeId, dateKey] = key.split('|');
+    let status = 'NO_IN';
+    let isLate = false, isAbsent = false;
+    let hours = null, inMin = null, outMin = null;
+
+    if (g.in) {
+      const inDate = new Date(g.in.timestamp);
+      inMin = minutesOfDay(inDate);
+      isLate = inMin > startMin;
+      status = isLate ? 'LATE' : 'ON_TIME';
+      if (isLate) {
+        if (!g.out) {
+          isAbsent = true;
+          status = 'ABSENT';
+        } else {
+          const outDate = new Date(g.out.timestamp);
+          outMin = minutesOfDay(outDate);
+          if (outMin > endMin) {
+            isAbsent = true;
+            status = 'ABSENT';
+          }
+        }
+      }
+      if (g.out && !isAbsent) {
+        hours = (new Date(g.out.timestamp) - new Date(g.in.timestamp)) / 3600000;
+      } else if (g.out) {
+        // Even if marked absent, still compute hours for reference
+        hours = (new Date(g.out.timestamp) - new Date(g.in.timestamp)) / 3600000;
+      }
+    }
+
+    results.push({
+      employeeId,
+      dateKey,
+      name: g.employee.name,
+      department: g.employee.department,
+      in: g.in,
+      out: g.out,
+      inMin, outMin,
+      isLate, isAbsent,
+      status,
+      hours,
+      note: (g.in && g.in.note) || (g.out && g.out.note) || ''
+    });
+  });
+
+  return results.sort((a, b) => b.dateKey.localeCompare(a.dateKey) || a.name.localeCompare(b.name));
+}
+
+function statusBadge(status) {
+  const map = {
+    ON_TIME:   ['ontime', 'ตรงเวลา ✓'],
+    LATE:      ['late', 'มาสาย ⏰'],
+    ABSENT:    ['absent', 'ขาดงาน ✗'],
+    NO_IN:     ['nocheckout', 'ไม่มีข้อมูลเข้า']
+  };
+  const [cls, lbl] = map[status] || ['nocheckout', status];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+function formatTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+}
+
+function updateTodayStatusInfo() {
+  const today = getLocalDateKey(new Date().toISOString());
+  const emp = getCurrentEmployee();
+  if (!emp || !emp.employeeId) {
+    $('todayStatusInfo').innerHTML =
+      `⏰ <strong>เวลาทำงาน:</strong> ${state.settings.startTime} — ${state.settings.endTime}`;
+    return;
+  }
+  const todayRecs = state.history.filter(r =>
+    r.employeeId === emp.employeeId && getLocalDateKey(r.timestamp) === today);
+  if (!todayRecs.length) {
+    $('todayStatusInfo').innerHTML =
+      `⏰ <strong>เวลาทำงาน:</strong> ${state.settings.startTime} — ${state.settings.endTime} · ยังไม่ได้บันทึกวันนี้`;
+    return;
+  }
+  const analysis = pairAndAnalyze(todayRecs)[0];
+  const inStr = analysis.in ? formatTime(analysis.in.timestamp) : '—';
+  const outStr = analysis.out ? formatTime(analysis.out.timestamp) : '—';
+  const hoursStr = analysis.hours != null ? analysis.hours.toFixed(2) + ' ชม.' : '—';
+  $('todayStatusInfo').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div>เข้า: <strong>${inStr}</strong></div>
+      <div>ออก: <strong>${outStr}</strong></div>
+      <div>ชั่วโมง: <strong>${hoursStr}</strong></div>
+      <div>สถานะ: ${statusBadge(analysis.status)}</div>
+    </div>`;
+}
+
+// ============ CAMERA (FRONT ONLY) ============
+function showCameraWarning(msg) {
+  $('cameraWarning').classList.remove('hide');
+  $('cameraWarning').innerHTML =
+    `⚠️ ${msg} — กรุณากดปุ่ม <strong>"📷 ใช้กล้องของมือถือแทน"</strong> ด้านล่าง`;
+}
+
+async function startCamera() {
+  state.videoReady = false;
+  $('camDot').classList.add('off');
+  $('camStatus').textContent = 'กำลังเปิดกล้อง...';
+
+  // Check for getUserMedia API support
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $('camStatus').textContent = 'เบราว์เซอร์ไม่รองรับ';
+    showCameraWarning('เบราว์เซอร์ไม่รองรับการใช้กล้องแบบสด');
+    return;
+  }
+
+  // Check for secure context (HTTPS or localhost). file:// won't work.
+  if (!window.isSecureContext) {
+    $('camStatus').textContent = 'ต้อง HTTPS';
+    showCameraWarning('ต้องเปิดไฟล์ผ่าน HTTPS เท่านั้น (ไม่ใช่ file://)');
+    return;
+  }
+
+  try {
+    if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+
+    // Try constraints in order from most specific to most permissive
+    const attempts = [
+      { audio: false, video: { facingMode: { exact: 'user' }, width: { ideal: 720 }, height: { ideal: 960 } } },
+      { audio: false, video: { facingMode: 'user' } },
+      { audio: false, video: true }  // last resort: any camera
+    ];
+
+    let stream = null, lastErr = null;
+    for (const c of attempts) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(c);
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!stream) throw lastErr || new Error('ไม่สามารถเปิดกล้องได้');
+
+    state.stream = stream;
+    const video = $('video');
+    video.srcObject = stream;
+
+    // Wait for metadata so videoWidth/Height are available
+    await new Promise((resolve) => {
+      if (video.readyState >= 1 && video.videoWidth > 0) return resolve();
+      const onReady = () => { video.removeEventListener('loadedmetadata', onReady); resolve(); };
+      video.addEventListener('loadedmetadata', onReady);
+      setTimeout(resolve, 3000); // safety timeout
+    });
+
+    // Some browsers block autoplay until user gesture — try explicit play()
+    try { await video.play(); } catch (e) { /* ignore, will retry on gesture */ }
+
+    state.videoReady = true;
+    $('camDot').classList.remove('off');
+    $('camStatus').textContent = 'กล้องพร้อม ✓';
+    $('cameraWarning').classList.add('hide');
+  } catch (err) {
+    state.videoReady = false;
+    $('camDot').classList.add('off');
+    const msg = err.name === 'NotAllowedError'
+      ? 'ถูกปฏิเสธการใช้กล้อง'
+      : err.name === 'NotFoundError'
+      ? 'ไม่พบกล้อง'
+      : (err.message || 'ไม่ทราบสาเหตุ');
+    $('camStatus').textContent = 'กล้องไม่พร้อม: ' + msg;
+    showCameraWarning(msg);
+    toast('เปิดกล้องไม่ได้: ' + msg, 'error');
+  }
+}
+
+// ============ GPS ============
+function getLocation() {
+  $('gpsTitle').textContent = 'กำลังค้นหาตำแหน่ง...';
+  $('gpsDetail').textContent = '';
+  if (!navigator.geolocation) { $('gpsTitle').textContent = 'ไม่รองรับ GPS'; return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      state.location = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+      $('gpsTitle').textContent = `${state.location.lat.toFixed(6)}, ${state.location.lng.toFixed(6)}`;
+      $('gpsDetail').textContent = `ความแม่นยำ ±${Math.round(state.location.accuracy)} ม.`;
+    },
+    err => {
+      $('gpsTitle').textContent = 'ไม่สามารถระบุตำแหน่งได้';
+      $('gpsDetail').textContent = err.message;
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// ============ EMPLOYEE DROPDOWN ============
+function refreshEmployeeDropdown() {
+  const sel = $('empSelect');
+  const hasList = state.employees.length > 0;
+  $('empFromList').classList.toggle('hide', !hasList);
+  $('empManual').classList.toggle('hide', hasList);
+
+  if (hasList) {
+    sel.innerHTML = '<option value="">-- เลือกจากรายชื่อ --</option>' +
+      state.employees.map(e =>
+        `<option value="${e.id}">${e.id} — ${e.name}</option>`
+      ).join('');
+  }
+}
+
+function onEmpSelectChange() {
+  const id = $('empSelect').value;
+  const emp = state.employees.find(x => x.id === id);
+  if (emp) {
+    $('empDeptDisplay').value = emp.department || '';
+  } else {
+    $('empDeptDisplay').value = '';
+  }
+}
+
+function getCurrentEmployee() {
+  if (state.employees.length > 0) {
+    const id = $('empSelect').value;
+    const emp = state.employees.find(x => x.id === id);
+    if (!emp) return null;
+    return { name: emp.name, employeeId: emp.id, department: emp.department };
+  } else {
+    return {
+      name: $('empName').value.trim(),
+      employeeId: $('empId').value.trim(),
+      department: $('empDept').value.trim()
+    };
+  }
+}
+
+// ============ CAMERA ACTIONS ============
+$('btnCapture').addEventListener('click', async () => {
+  if (!state.stream || !state.videoReady) {
+    toast('กล้องยังไม่พร้อม — กด "ใช้กล้องของมือถือแทน" ด้านล่าง', 'error');
+    return;
+  }
+  const v = $('video'), c = $('canvas');
+
+  // Make sure video is actually playing (some browsers require explicit play())
+  if (v.paused) {
+    try { await v.play(); } catch(e) {}
+  }
+
+  let w = v.videoWidth, h = v.videoHeight;
+  // If still 0, wait a bit (video metadata might lag)
+  if (!w || !h) {
+    await new Promise(r => setTimeout(r, 400));
+    w = v.videoWidth; h = v.videoHeight;
+  }
+  if (!w || !h) {
+    toast('กล้องยังโหลดไม่เสร็จ รอสักครู่แล้วลองใหม่', 'error');
+    return;
+  }
+
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.save();
+  ctx.translate(w, 0); ctx.scale(-1, 1);
+  ctx.drawImage(v, 0, 0, w, h);
+  ctx.restore();
+  state.photoDataUrl = c.toDataURL('image/jpeg', 0.75);
+  const img = $('photoPreview');
+  img.style.transform = ''; // use CSS default (scaleX -1) for live camera
+  img.src = state.photoDataUrl;
+  img.classList.remove('hide');
+  v.classList.add('hide');
+  toast('ถ่ายรูปสำเร็จ', 'success');
+});
+
+$('btnRetake').addEventListener('click', () => {
+  state.photoDataUrl = null;
+  $('photoPreview').classList.add('hide');
+  $('video').classList.remove('hide');
+  // If live camera isn't working, clicking retake should re-open native camera
+  if (!state.videoReady) $('nativeCamera').click();
+});
+
+// Native camera fallback (uses device camera app with front camera)
+$('btnNativeCamera').addEventListener('click', () => $('nativeCamera').click());
+
+$('nativeCamera').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    state.photoDataUrl = ev.target.result;
+    const img = $('photoPreview');
+    // Don't mirror images from native camera — they're already correct orientation
+    img.style.transform = 'none';
+    img.src = state.photoDataUrl;
+    img.classList.remove('hide');
+    $('video').classList.add('hide');
+    toast('เลือกรูปสำเร็จ', 'success');
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+
+$('btnRefreshGps').addEventListener('click', getLocation);
+
+// ============ SUBMIT ============
+function validate(emp) {
+  if (!emp || !emp.name) { toast('กรุณากรอก/เลือกชื่อพนักงาน', 'error'); return false; }
+  if (!emp.employeeId) { toast('กรุณากรอก/เลือกรหัสพนักงาน', 'error'); return false; }
+  if (!state.photoDataUrl) { toast('กรุณาถ่ายรูปเซลฟี่', 'error'); return false; }
+  if (!state.location) { toast('ยังไม่พบพิกัด GPS', 'error'); return false; }
+  return true;
+}
+
+function getCurrentNote() {
+  const sel = $('noteSelect').value;
+  if (sel === '__other__') return $('noteCustom').value.trim();
+  return sel;
+}
+
+async function submitRecord(type) {
+  const emp = getCurrentEmployee();
+  if (!validate(emp)) return;
+  localStorage.setItem(LS.lastEmp, JSON.stringify(emp));
+
+  const note = getCurrentNote();
+  const record = {
+    id: 'rec_' + Date.now(),
+    timestamp: new Date().toISOString(),
+    type,
+    name: emp.name,
+    employeeId: emp.employeeId,
+    department: emp.department,
+    lat: state.location.lat,
+    lng: state.location.lng,
+    accuracy: state.location.accuracy,
+    photo: state.photoDataUrl,
+    note: note || '',
+    submittedBy: state.session.username,
+    device: navigator.userAgent.substring(0, 100),
+    synced: false
+  };
+
+  state.history.unshift(record);
+  localStorage.setItem(LS.history, JSON.stringify(state.history));
+
+  if (state.webhookUrl) {
+    try {
+      await sendToSheet(record);
+      state.history[0].synced = true;
+      localStorage.setItem(LS.history, JSON.stringify(state.history));
+      toast(`บันทึก${type === 'IN' ? 'เข้า' : 'ออก'}งานสำเร็จ ✓`, 'success');
+    } catch (err) {
+      toast('บันทึกในเครื่องแล้ว แต่ส่ง Sheet ไม่สำเร็จ', 'error');
+    }
+  } else {
+    toast(`บันทึก${type === 'IN' ? 'เข้า' : 'ออก'}งานแล้ว (เฉพาะเครื่อง)`, 'success');
+  }
+
+  state.photoDataUrl = null;
+  $('photoPreview').classList.add('hide');
+  $('video').classList.remove('hide');
+
+  // Reset note selector
+  $('noteSelect').value = '';
+  $('noteCustom').value = '';
+  $('noteCustom').classList.add('hide');
+
+  renderHistory();
+  updateTodayStatusInfo();
+}
+
+async function sendToSheet(record) {
+  const res = await fetch(state.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(record)
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+$('btnCheckIn').addEventListener('click', () => submitRecord('IN'));
+$('btnCheckOut').addEventListener('click', () => submitRecord('OUT'));
+
+// ============ HISTORY ============
+function getVisibleHistory() {
+  if (state.session.role === 'admin') return state.history;
+  // user sees only records of the employee they last submitted or matching empId input
+  const lastEmp = JSON.parse(localStorage.getItem(LS.lastEmp) || 'null');
+  if (!lastEmp) return [];
+  return state.history.filter(r =>
+    r.employeeId === lastEmp.employeeId || r.submittedBy === state.session.username
+  );
+}
+
+function renderHistory() {
+  const list = $('historyList');
+  const records = getVisibleHistory();
+  $('historyScope').textContent = state.session.role === 'admin'
+    ? '(ดูทั้งหมด — Admin)' : '(ประวัติของคุณ)';
+
+  if (!records.length) {
+    list.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>';
+    return;
+  }
+  // Analyze each record in context of its day
+  const analyses = pairAndAnalyze(records);
+  const analysisMap = new Map();
+  analyses.forEach(a => {
+    if (a.in) analysisMap.set(a.in.id, a);
+    if (a.out) analysisMap.set(a.out.id, a);
+  });
+
+  const startMin = parseHM(state.settings.startTime);
+  const endMin = parseHM(state.settings.endTime);
+
+  list.innerHTML = records.map(r => {
+    const d = new Date(r.timestamp);
+    const dateStr = d.toLocaleString('th-TH', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    const typeLabel = r.type === 'IN' ? 'เข้างาน' : 'ออกงาน';
+    const typeClass = r.type === 'IN' ? 'checkin' : 'checkout';
+    const statusClass = r.synced ? 'status-synced' : 'status-pending';
+    const statusLabel = r.synced ? '☁ Sync แล้ว' : '⏳ ในเครื่อง';
+    const mapLink = `https://www.google.com/maps?q=${r.lat},${r.lng}`;
+
+    // Per-record status badge
+    let rowBadge = '';
+    const recMin = minutesOfDay(d);
+    if (r.type === 'IN') {
+      rowBadge = recMin > startMin ? statusBadge('LATE') : statusBadge('ON_TIME');
+    } else if (r.type === 'OUT' && recMin > endMin) {
+      rowBadge = `<span class="badge absent">ออกเกินเวลา</span>`;
+    }
+
+    // Daily analysis badge (overall day status)
+    const a = analysisMap.get(r.id);
+    const dayBadge = a && a.status !== 'ON_TIME' ? statusBadge(a.status) : '';
+
+    const noteBadge = r.note ? `<span class="badge note">📝 ${escapeHtml(r.note)}</span>` : '';
+
+    return `
+      <div class="history-item">
+        <img class="history-thumb" src="${r.photo}" alt="">
+        <div class="history-info">
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+            <span class="history-type ${typeClass}">${typeLabel}</span>
+            ${rowBadge}
+            ${noteBadge}
+          </div>
+          <div class="history-name">${escapeHtml(r.name)} · ${escapeHtml(r.employeeId)}</div>
+          <div class="history-time">${dateStr}</div>
+          <div class="history-loc">
+            <a href="${mapLink}" target="_blank" style="color:#0ea5e9;text-decoration:none">
+              📍 ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}
+            </a>
+          </div>
+          <span class="history-status ${statusClass}">${statusLabel}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ============ REPORTS ============
+function initReportTab() {
+  const today = getLocalDateKey(new Date().toISOString());
+  if (!$('reportDate').value) $('reportDate').value = today;
+  if (!$('reportMonth').value) $('reportMonth').value = today.slice(0, 7);
+  renderDailyReport();
+}
+
+function getScopedRecords() {
+  // Admin sees all; user sees only their own
+  if (state.session.role === 'admin') return state.history;
+  const lastEmp = JSON.parse(localStorage.getItem(LS.lastEmp) || 'null');
+  return state.history.filter(r =>
+    (lastEmp && r.employeeId === lastEmp.employeeId) || r.submittedBy === state.session.username);
+}
+
+function renderDailyReport() {
+  const date = $('reportDate').value;
+  if (!date) return;
+  const records = getScopedRecords().filter(r => getLocalDateKey(r.timestamp) === date);
+  const analyses = pairAndAnalyze(records);
+
+  // Stats
+  const total = analyses.length;
+  const onTime = analyses.filter(a => a.status === 'ON_TIME').length;
+  const late = analyses.filter(a => a.status === 'LATE').length;
+  const absent = analyses.filter(a => a.status === 'ABSENT').length;
+  $('dStatTotal').textContent = total;
+  $('dStatOnTime').textContent = onTime;
+  $('dStatLate').textContent = late;
+  $('dStatAbsent').textContent = absent;
+
+  const el = $('dailyTable');
+  if (!analyses.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px">ไม่มีข้อมูลวันนี้</div>';
+    return;
+  }
+  const rows = analyses.map(a => `
+    <tr>
+      <td>${escapeHtml(a.employeeId)}</td>
+      <td>${escapeHtml(a.name)}</td>
+      <td>${escapeHtml(a.department || '')}</td>
+      <td>${a.in ? formatTime(a.in.timestamp) : '—'}</td>
+      <td>${a.out ? formatTime(a.out.timestamp) : '—'}</td>
+      <td>${a.hours != null ? a.hours.toFixed(2) : '—'}</td>
+      <td>${statusBadge(a.status)}</td>
+      <td>${escapeHtml(a.note || '')}</td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>รหัส</th><th>ชื่อ</th><th>แผนก</th>
+        <th>เข้า</th><th>ออก</th><th>ชม.</th>
+        <th>สถานะ</th><th>หมายเหตุ</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function renderMonthlyReport() {
+  const month = $('reportMonth').value; // YYYY-MM
+  if (!month) return;
+  const records = getScopedRecords().filter(r => getLocalDateKey(r.timestamp).startsWith(month));
+  const analyses = pairAndAnalyze(records);
+
+  // Group by employee
+  const byEmp = new Map();
+  analyses.forEach(a => {
+    const key = a.employeeId;
+    if (!byEmp.has(key)) {
+      byEmp.set(key, {
+        employeeId: a.employeeId,
+        name: a.name,
+        department: a.department,
+        days: 0, hours: 0, late: 0, absent: 0, notes: new Set()
+      });
+    }
+    const s = byEmp.get(key);
+    s.days++;
+    if (a.hours) s.hours += a.hours;
+    if (a.status === 'LATE') s.late++;
+    if (a.status === 'ABSENT') s.absent++;
+    if (a.note) s.notes.add(a.note);
+  });
+  const summary = [...byEmp.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+  // Stats totals
+  const totalDays = summary.reduce((s, x) => s + x.days, 0);
+  const totalHours = summary.reduce((s, x) => s + x.hours, 0);
+  const totalLate = summary.reduce((s, x) => s + x.late, 0);
+  const totalAbsent = summary.reduce((s, x) => s + x.absent, 0);
+  $('mStatDays').textContent = totalDays;
+  $('mStatHours').textContent = totalHours.toFixed(1);
+  $('mStatLate').textContent = totalLate;
+  $('mStatAbsent').textContent = totalAbsent;
+
+  const el = $('monthlyTable');
+  if (!summary.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px">ไม่มีข้อมูลเดือนนี้</div>';
+    return;
+  }
+  const rows = summary.map(s => `
+    <tr>
+      <td>${escapeHtml(s.employeeId)}</td>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${escapeHtml(s.department || '')}</td>
+      <td>${s.days}</td>
+      <td>${s.hours.toFixed(2)}</td>
+      <td style="color:#d97706;font-weight:600">${s.late}</td>
+      <td style="color:#dc2626;font-weight:600">${s.absent}</td>
+      <td>${escapeHtml([...s.notes].join(', '))}</td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>รหัส</th><th>ชื่อ</th><th>แผนก</th>
+        <th>วัน</th><th>ชม.รวม</th>
+        <th>สาย</th><th>ขาด</th><th>หมายเหตุ</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function exportReportCSV(filename, headers, rows) {
+  const csv = [headers, ...rows].map(row =>
+    row.map(c => `"${String(c ?? '').replace(/"/g,'""')}"`).join(',')
+  ).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+  toast('Export สำเร็จ', 'success');
+}
+
+$('btnExport').addEventListener('click', () => {
+  const records = getVisibleHistory();
+  if (!records.length) { toast('ไม่มีข้อมูลให้ export', 'error'); return; }
+  const headers = ['Timestamp','Type','Name','EmployeeID','Department','Lat','Lng','Accuracy','MapsLink','SubmittedBy'];
+  const rows = records.map(r => [
+    r.timestamp, r.type, r.name, r.employeeId, r.department,
+    r.lat, r.lng, r.accuracy, `https://www.google.com/maps?q=${r.lat},${r.lng}`, r.submittedBy||''
+  ]);
+  const csv = [headers, ...rows].map(row =>
+    row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')
+  ).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `attendance_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Export สำเร็จ', 'success');
+});
+
+$('btnClear')?.addEventListener('click', () => {
+  if (!confirm('ล้างประวัติทั้งหมดในเครื่อง?')) return;
+  state.history = [];
+  localStorage.removeItem(LS.history);
+  renderHistory();
+  renderAdmin();
+  toast('ล้างข้อมูลแล้ว', 'success');
+});
+
+// ============ ADMIN RENDER ============
+function renderAdmin() {
+  if (state.session?.role !== 'admin') return;
+  $('statEmp').textContent = state.employees.length;
+  $('statDept').textContent = state.departments.length;
+  $('statRec').textContent = state.history.length;
+  $('statUser').textContent = state.users.length;
+
+  // Employee table
+  $('empCount').textContent = state.employees.length;
+  renderTable('empTable', state.employees,
+    [{k:'id',label:'รหัส'},{k:'name',label:'ชื่อ'},{k:'department',label:'แผนก'}],
+    idx => { if (confirm('ลบรายการนี้?')) { state.employees.splice(idx,1); saveEmployees(); }}
+  );
+
+  // Department table
+  $('deptCount').textContent = state.departments.length;
+  renderTable('deptTable', state.departments.map(d => ({department:d})),
+    [{k:'department',label:'แผนก'}],
+    idx => { if (confirm('ลบแผนกนี้?')) { state.departments.splice(idx,1); saveDepts(); }}
+  );
+
+  // User table
+  renderTable('userTable', state.users.map(u => ({
+    username: u.username,
+    role: u.role === 'admin' ? '<span class="badge admin">ADMIN</span>' : '<span class="badge user">USER</span>'
+  })), [{k:'username',label:'Username'},{k:'role',label:'Role'}],
+    idx => {
+      if (state.users[idx].username === state.session.username) { toast('ลบบัญชีตัวเองไม่ได้', 'error'); return; }
+      if (confirm('ลบผู้ใช้ ' + state.users[idx].username + '?')) {
+        state.users.splice(idx,1);
+        localStorage.setItem(LS.users, JSON.stringify(state.users));
+        renderAdmin();
+      }
+    }
+  );
+
+  $('webhookUrl').value = state.webhookUrl;
+  $('cfgStart').value = state.settings.startTime;
+  $('cfgEnd').value = state.settings.endTime;
+}
+
+function renderTable(elId, rows, cols, onDelete) {
+  const el = $(elId);
+  if (!rows.length) { el.innerHTML = '<div class="empty" style="padding:20px">ไม่มีข้อมูล</div>'; return; }
+  const head = cols.map(c => `<th>${c.label}</th>`).join('') + '<th></th>';
+  const body = rows.map((r,i) =>
+    '<tr>' + cols.map(c => `<td>${r[c.k] ?? ''}</td>`).join('') +
+    `<td><button class="btn-danger" style="padding:4px 8px;font-size:11px" data-del="${i}">✕</button></td></tr>`
+  ).join('');
+  el.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  el.querySelectorAll('[data-del]').forEach(b =>
+    b.addEventListener('click', () => onDelete(+b.dataset.del))
+  );
+}
+
+function saveEmployees() {
+  localStorage.setItem(LS.employees, JSON.stringify(state.employees));
+  refreshEmployeeDropdown();
+  renderAdmin();
+}
+function saveDepts() {
+  localStorage.setItem(LS.departments, JSON.stringify(state.departments));
+  renderAdmin();
+}
+
+// ============ FILE UPLOAD & PARSING ============
+function normalizeHeader(h) {
+  return String(h || '').toLowerCase().trim()
+    .replace(/[\s_\-]/g,'');
+}
+
+function mapRowToEmployee(row, headers) {
+  const out = { id:'', name:'', department:'' };
+  for (let i = 0; i < headers.length; i++) {
+    const h = normalizeHeader(headers[i]);
+    const v = String(row[i] ?? '').trim();
+    if (!v) continue;
+    if (['id','empid','employeeid','รหัส','รหัสพนักงาน','code'].includes(h)) out.id = v;
+    else if (['name','fullname','ชื่อ','ชื่อนามสกุล','ชื่อ-นามสกุล','ชื่อ-สกุล'].includes(h)) out.name = v;
+    else if (['department','dept','แผนก','dep','ฝ่าย'].includes(h)) out.department = v;
+  }
+  // Fallback: if headers missing, try positional (id, name, department)
+  if (!out.id && !out.name) {
+    out.id = String(row[0] ?? '').trim();
+    out.name = String(row[1] ?? '').trim();
+    out.department = String(row[2] ?? '').trim();
+  }
+  return (out.id || out.name) ? out : null;
+}
+
+async function parseFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'csv') {
+    const text = await file.text();
+    return parseCSV(text);
+  }
+  if (ext === 'xlsx' || ext === 'xls') {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  }
+  if (ext === 'pdf') {
+    return await parsePDF(file);
+  }
+  throw new Error('ไม่รองรับไฟล์ประเภทนี้');
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let cur = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i+1] === '"') { field += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { cur.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (field !== '' || cur.length) { cur.push(field); rows.push(cur); cur = []; field = ''; }
+        if (c === '\r' && text[i+1] === '\n') i++;
+      } else field += c;
+    }
+  }
+  if (field !== '' || cur.length) { cur.push(field); rows.push(cur); }
+  return rows;
+}
+
+async function parsePDF(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const allLines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    // Group by y-coord into lines
+    const lines = {};
+    content.items.forEach(it => {
+      const y = Math.round(it.transform[5]);
+      if (!lines[y]) lines[y] = [];
+      lines[y].push({ x: it.transform[4], str: it.str });
+    });
+    Object.keys(lines).sort((a,b) => b - a).forEach(y => {
+      const line = lines[y].sort((a,b) => a.x - b.x).map(i => i.str).join(' ').trim();
+      if (line) allLines.push(line);
+    });
+  }
+  // Try to split each line into columns by runs of whitespace or tabs
+  return allLines.map(l => l.split(/\s{2,}|\t|,|\|/).map(s => s.trim()).filter(Boolean));
+}
+
+async function handleEmpUpload(file) {
+  try {
+    toast('กำลังอ่านไฟล์...', '');
+    const rows = await parseFile(file);
+    if (!rows.length) { toast('ไฟล์ว่าง', 'error'); return; }
+
+    // Detect header row
+    const headers = rows[0].map(String);
+    const hasHeader = headers.some(h => /id|name|dept|รหัส|ชื่อ|แผนก/i.test(h));
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+    const useHeaders = hasHeader ? headers : ['id','name','department'];
+
+    const parsed = dataRows.map(r => mapRowToEmployee(r, useHeaders)).filter(Boolean);
+    if (!parsed.length) { toast('ไม่พบข้อมูลที่ใช้ได้', 'error'); return; }
+
+    // Dedupe by id (or name)
+    const byKey = new Map();
+    [...state.employees, ...parsed].forEach(e => {
+      const k = e.id || e.name;
+      if (k) byKey.set(k, e);
+    });
+    state.employees = [...byKey.values()];
+    saveEmployees();
+
+    // Also collect departments
+    parsed.forEach(e => {
+      if (e.department && !state.departments.includes(e.department)) {
+        state.departments.push(e.department);
+      }
+    });
+    saveDepts();
+
+    toast(`นำเข้า ${parsed.length} รายการสำเร็จ`, 'success');
+  } catch (err) {
+    toast('ไม่สามารถอ่านไฟล์ได้: ' + err.message, 'error');
+  }
+}
+
+async function handleDeptUpload(file) {
+  try {
+    const rows = await parseFile(file);
+    if (!rows.length) { toast('ไฟล์ว่าง', 'error'); return; }
+    const headers = rows[0].map(String);
+    const hasHeader = headers.some(h => /dept|แผนก|department|ฝ่าย/i.test(h));
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+    const idx = hasHeader ? headers.findIndex(h => /dept|แผนก|department|ฝ่าย/i.test(h)) : 0;
+    const added = [];
+    dataRows.forEach(r => {
+      const v = String(r[idx] ?? '').trim();
+      if (v && !state.departments.includes(v)) {
+        state.departments.push(v);
+        added.push(v);
+      }
+    });
+    saveDepts();
+    toast(`เพิ่มแผนก ${added.length} รายการ`, 'success');
+  } catch (err) {
+    toast('ไม่สามารถอ่านไฟล์ได้: ' + err.message, 'error');
+  }
+}
+
+$('fileEmp').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) handleEmpUpload(f);
+  e.target.value = '';
+});
+$('fileDept').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) handleDeptUpload(f);
+  e.target.value = '';
+});
+
+$('btnDownloadTemplate').addEventListener('click', () => {
+  const csv = 'id,name,department\nEMP-001,สมชาย ใจดี,การขาย\nEMP-002,สมหญิง ขยัน,การตลาด\nEMP-003,สมชาติ เก่ง,IT\n';
+  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'employees_template.csv'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+$('btnClearEmp').addEventListener('click', () => {
+  if (!confirm('ล้างรายชื่อพนักงานทั้งหมด?')) return;
+  state.employees = [];
+  saveEmployees();
+});
+
+$('btnAddDept').addEventListener('click', () => {
+  const v = $('newDeptName').value.trim();
+  if (!v) return;
+  if (!state.departments.includes(v)) {
+    state.departments.push(v);
+    saveDepts();
+    toast('เพิ่มแผนกแล้ว', 'success');
+  } else toast('มีแผนกนี้อยู่แล้ว', 'error');
+  $('newDeptName').value = '';
+});
+
+// ============ USER MGMT ============
+$('btnAddUser').addEventListener('click', async () => {
+  const u = $('newUserName').value.trim();
+  const p = $('newUserPass').value;
+  const r = $('newUserRole').value;
+  if (!u || !p) { toast('กรอก username/password', 'error'); return; }
+  if (state.users.find(x => x.username === u)) { toast('มี username นี้แล้ว', 'error'); return; }
+  state.users.push({ username: u, passwordHash: await hash(p), role: r });
+  localStorage.setItem(LS.users, JSON.stringify(state.users));
+  $('newUserName').value = ''; $('newUserPass').value = '';
+  renderAdmin();
+  toast('เพิ่มผู้ใช้แล้ว', 'success');
+});
+
+// ============ SETTINGS ============
+$('btnSaveSettings').addEventListener('click', () => {
+  const url = $('webhookUrl').value.trim();
+  state.webhookUrl = url;
+  localStorage.setItem(LS.webhook, url);
+  toast('บันทึกการตั้งค่าแล้ว', 'success');
+});
+$('btnTestWebhook').addEventListener('click', async () => {
+  const url = $('webhookUrl').value.trim();
+  if (!url) { toast('ยังไม่ได้ใส่ URL', 'error'); return; }
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.ok) toast('เชื่อมต่อสำเร็จ ✓', 'success');
+    else toast('Response ไม่ถูกต้อง', 'error');
+  } catch (err) {
+    toast('ทดสอบล้มเหลว: ' + err.message, 'error');
+  }
+});
+
+// ============ EVENT LISTENERS ============
+$('btnLogin').addEventListener('click', handleLogin);
+$('btnLogout').addEventListener('click', handleLogout);
+$('empSelect').addEventListener('change', () => { onEmpSelectChange(); updateTodayStatusInfo(); });
+$('loginPass').addEventListener('keypress', e => { if (e.key === 'Enter') handleLogin(); });
+
+// Note select: show custom input if "อื่นๆ"
+$('noteSelect').addEventListener('change', e => {
+  $('noteCustom').classList.toggle('hide', e.target.value !== '__other__');
+  if (e.target.value !== '__other__') $('noteCustom').value = '';
+});
+
+// Update today status when employee info changes
+['empName','empId','empDept'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('input', () => updateTodayStatusInfo());
+});
+
+// Report date/month change
+$('reportDate').addEventListener('change', renderDailyReport);
+$('reportMonth').addEventListener('change', renderMonthlyReport);
+
+$('btnExportDaily').addEventListener('click', () => {
+  const date = $('reportDate').value;
+  const records = getScopedRecords().filter(r => getLocalDateKey(r.timestamp) === date);
+  const analyses = pairAndAnalyze(records);
+  if (!analyses.length) { toast('ไม่มีข้อมูลให้ export', 'error'); return; }
+  const headers = ['รหัส','ชื่อ','แผนก','เข้า','ออก','ชั่วโมง','สถานะ','หมายเหตุ'];
+  const rows = analyses.map(a => [
+    a.employeeId, a.name, a.department,
+    a.in ? formatTime(a.in.timestamp) : '',
+    a.out ? formatTime(a.out.timestamp) : '',
+    a.hours != null ? a.hours.toFixed(2) : '',
+    ({ON_TIME:'ตรงเวลา',LATE:'มาสาย',ABSENT:'ขาดงาน',NO_IN:'ไม่มีข้อมูลเข้า'})[a.status],
+    a.note || ''
+  ]);
+  exportReportCSV(`daily_${date}.csv`, headers, rows);
+});
+
+$('btnExportMonthly').addEventListener('click', () => {
+  const month = $('reportMonth').value;
+  const records = getScopedRecords().filter(r => getLocalDateKey(r.timestamp).startsWith(month));
+  const analyses = pairAndAnalyze(records);
+  if (!analyses.length) { toast('ไม่มีข้อมูลให้ export', 'error'); return; }
+  const byEmp = new Map();
+  analyses.forEach(a => {
+    const key = a.employeeId;
+    if (!byEmp.has(key)) byEmp.set(key, {
+      employeeId: a.employeeId, name: a.name, department: a.department,
+      days:0, hours:0, late:0, absent:0, notes:new Set()
+    });
+    const s = byEmp.get(key);
+    s.days++;
+    if (a.hours) s.hours += a.hours;
+    if (a.status === 'LATE') s.late++;
+    if (a.status === 'ABSENT') s.absent++;
+    if (a.note) s.notes.add(a.note);
+  });
+  const headers = ['รหัส','ชื่อ','แผนก','วันทำการ','ชั่วโมงรวม','ครั้งมาสาย','ครั้งขาดงาน','หมายเหตุ'];
+  const rows = [...byEmp.values()].map(s => [
+    s.employeeId, s.name, s.department, s.days, s.hours.toFixed(2),
+    s.late, s.absent, [...s.notes].join(', ')
+  ]);
+  exportReportCSV(`monthly_${month}.csv`, headers, rows);
+});
+
+// Save work time settings
+$('btnSaveWorkTime').addEventListener('click', () => {
+  const start = $('cfgStart').value;
+  const end = $('cfgEnd').value;
+  if (!start || !end) { toast('กรอกเวลาให้ครบ', 'error'); return; }
+  state.settings = { startTime: start, endTime: end };
+  localStorage.setItem(LS.settings, JSON.stringify(state.settings));
+  toast('บันทึกเวลาทำงานแล้ว', 'success');
+  updateTodayStatusInfo();
+});
+
+// ============ UTILS ============
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])
+  );
+}
+
+// ============ BOOT ============
+(async () => {
+  await initUsers();
+  if (state.session) showMainApp();
+})();
+
+window.addEventListener('beforeunload', () => {
+  if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+});
+</script>
+</body>
+</html>
